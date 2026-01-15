@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LiveVision - SmolVLM Webcam</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 24px;
+            padding: 32px 20px;
+            background: linear-gradient(to bottom, #f8f9fa, #e9ecef);
+            min-height: 100vh;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 8px;
+        }
+
+        h1 {
+            font-size: 28px;
+            font-weight: 600;
+            color: #212529;
+            margin-bottom: 4px;
+        }
+
+        .subtitle {
+            font-size: 14px;
+            color: #6c757d;
+            font-weight: 400;
+        }
+
+        .video-container {
+            position: relative;
+            background: #000;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1), 0 1px 3px rgba(0, 0, 0, 0.08);
+        }
+
+        #videoFeed {
+            width: 640px;
+            height: 480px;
+            display: block;
+        }
+
+        .controls-panel {
+            background: white;
+            border-radius: 12px;
+            padding: 24px;
+            width: 640px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1), 0 1px 3px rgba(0, 0, 0, 0.08);
+        }
+
+        .field {
+            margin-bottom: 18px;
+        }
+
+        .field:last-child {
+            margin-bottom: 0;
+        }
+
+        label {
+            display: block;
+            font-weight: 600;
+            font-size: 14px;
+            color: #495057;
+            margin-bottom: 6px;
+        }
+
+        input[type="text"], textarea, select {
+            width: 100%;
+            padding: 10px 12px;
+            border: 1.5px solid #dee2e6;
+            border-radius: 8px;
+            font-size: 14px;
+            font-family: inherit;
+            transition: border-color 0.2s, box-shadow 0.2s;
+            background: white;
+        }
+
+        input[type="text"]:focus, textarea:focus, select:focus {
+            outline: none;
+            border-color: #4a90e2;
+            box-shadow: 0 0 0 3px rgba(74, 144, 226, 0.1);
+        }
+
+        textarea {
+            resize: vertical;
+        }
+
+        .control-row {
+            display: flex;
+            gap: 12px;
+            align-items: flex-end;
+            margin-top: 20px;
+        }
+
+        .control-row .field {
+            flex: 1;
+            margin-bottom: 0;
+        }
+
+        #startButton {
+            padding: 11px 32px;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            border: none;
+            border-radius: 8px;
+            color: white;
+            transition: all 0.2s;
+            white-space: nowrap;
+        }
+
+        #startButton.start {
+            background: #4a90e2;
+        }
+
+        #startButton.start:hover {
+            background: #357abd;
+            transform: translateY(-1px);
+            box-shadow: 0 2px 4px rgba(74, 144, 226, 0.3);
+        }
+
+        #startButton.stop {
+            background: #e74c3c;
+        }
+
+        #startButton.stop:hover {
+            background: #c0392b;
+            transform: translateY(-1px);
+            box-shadow: 0 2px 4px rgba(231, 76, 60, 0.3);
+        }
+
+        .status-bar {
+            background: white;
+            border-radius: 12px;
+            padding: 14px 20px;
+            width: 640px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.06);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 14px;
+            color: #6c757d;
+        }
+
+        .status-indicator {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #adb5bd;
+        }
+
+        .status-dot.active {
+            background: #28a745;
+            box-shadow: 0 0 8px rgba(40, 167, 69, 0.5);
+        }
+
+        canvas {
+            display: none;
+        }
+
+        @media (max-width: 700px) {
+            #videoFeed {
+                width: 100%;
+                height: auto;
+            }
+            .controls-panel, .status-bar {
+                width: 100%;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <h1>LiveVision</h1>
+        <p class="subtitle">Real-time vision understanding with SmolVLM</p>
+    </header>
+
+    <div class="video-container">
+        <video id="videoFeed" autoplay playsinline></video>
+    </div>
+    <canvas id="canvas"></canvas>
+
+    <div class="controls-panel">
+        <div class="field">
+            <label for="baseURL">API Server URL</label>
+            <input type="text" id="baseURL" value="http://localhost:8080">
+        </div>
+        
+        <div class="field">
+            <label for="instructionText">Instruction</label>
+            <textarea id="instructionText" rows="2" placeholder="Tell the model what to describe...">Describe what you see in one sentence.</textarea>
+        </div>
+
+        <div class="field">
+            <label for="responseText">Response</label>
+            <textarea id="responseText" rows="3" readonly placeholder="Model response will appear here..."></textarea>
+        </div>
+
+        <div class="control-row">
+            <div class="field">
+                <label for="intervalSelect">Update Interval</label>
+                <select id="intervalSelect">
+                    <option value="100">100ms</option>
+                    <option value="250">250ms</option>
+                    <option value="500" selected>500ms</option>
+                    <option value="1000">1 second</option>
+                    <option value="2000">2 seconds</option>
+                    <option value="5000">5 seconds</option>
+                </select>
+            </div>
+            <button id="startButton" class="start">Start Processing</button>
+        </div>
+    </div>
+
+    <div class="status-bar">
+        <div class="status-indicator">
+            <span class="status-dot" id="statusDot"></span>
+            <span id="statusText">Camera Ready</span>
+        </div>
+        <span id="frameCounter">Frames: 0</span>
+    </div>
+
+    <script>
+        const video = document.getElementById('videoFeed');
+        const canvas = document.getElementById('canvas');
+        const baseURL = document.getElementById('baseURL');
+        const instructionText = document.getElementById('instructionText');
+        const responseText = document.getElementById('responseText');
+        const intervalSelect = document.getElementById('intervalSelect');
+        const startButton = document.getElementById('startButton');
+        const statusDot = document.getElementById('statusDot');
+        const statusText = document.getElementById('statusText');
+        const frameCounter = document.getElementById('frameCounter');
+
+        let stream;
+        let intervalId;
+        let isProcessing = false;
+        let frameCount = 0;
+
+        async function sendChatCompletion(instruction, imageBase64) {
+            const response = await fetch(`${baseURL.value}/v1/chat/completions`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    messages: [
+                        {
+                            role: 'user',
+                            content: [
+                                { type: 'text', text: instruction },
+                                { type: 'image_url', image_url: { url: imageBase64 } }
+                            ]
+                        }
+                    ],
+                    max_tokens: 100,
+                    temperature: 0.1
+                })
+            });
+
+            if (!response.ok) {
+                const error = await response.text();
+                throw new Error(`Server error ${response.status}: ${error}`);
+            }
+
+            const data = await response.json();
+            return data.choices[0].message.content;
+        }
+
+        async function initCamera() {
+            try {
+                stream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { width: 640, height: 480 }, 
+                    audio: false 
+                });
+                video.srcObject = stream;
+                statusText.textContent = 'Camera Ready';
+                responseText.value = 'Camera initialized. Click Start to begin processing.';
+            } catch (err) {
+                console.error("Camera error:", err);
+                statusText.textContent = 'Camera Error';
+                responseText.value = `Error: ${err.message}. Please grant camera permissions.`;
+            }
+        }
+
+        function captureFrame() {
+            if (!stream || !video.videoWidth) return null;
+            
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(video, 0, 0);
+            
+            return canvas.toDataURL('image/jpeg', 0.7);
+        }
+
+        async function processFrame() {
+            if (!isProcessing) return;
+
+            const imageBase64 = captureFrame();
+            if (!imageBase64) {
+                responseText.value = 'Failed to capture frame. Retrying...';
+                return;
+            }
+
+            const instruction = instructionText.value.trim() || "What do you see?";
+
+            try {
+                const response = await sendChatCompletion(instruction, imageBase64);
+                responseText.value = response;
+                frameCount++;
+                frameCounter.textContent = `Frames: ${frameCount}`;
+            } catch (error) {
+                console.error('Error:', error);
+                responseText.value = `Error: ${error.message}`;
+                statusText.textContent = 'Connection Error';
+            }
+        }
+
+        function handleStart() {
+            if (!stream) {
+                alert('Camera not available. Please grant permissions and refresh.');
+                return;
+            }
+
+            isProcessing = true;
+            frameCount = 0;
+            
+            startButton.textContent = "Stop Processing";
+            startButton.classList.remove('start');
+            startButton.classList.add('stop');
+            
+            statusDot.classList.add('active');
+            statusText.textContent = 'Processing';
+            
+            instructionText.disabled = true;
+            intervalSelect.disabled = true;
+            baseURL.disabled = true;
+
+            responseText.value = 'Starting processing...';
+            
+            const intervalMs = parseInt(intervalSelect.value, 10);
+            processFrame();
+            intervalId = setInterval(processFrame, intervalMs);
+        }
+
+        function handleStop() {
+            isProcessing = false;
+            
+            if (intervalId) {
+                clearInterval(intervalId);
+                intervalId = null;
+            }
+
+            startButton.textContent = "Start Processing";
+            startButton.classList.remove('stop');
+            startButton.classList.add('start');
+            
+            statusDot.classList.remove('active');
+            statusText.textContent = 'Stopped';
+            
+            instructionText.disabled = false;
+            intervalSelect.disabled = false;
+            baseURL.disabled = false;
+
+            responseText.value = `Processing stopped. Processed ${frameCount} frames.`;
+        }
+
+        startButton.addEventListener('click', () => {
+            if (isProcessing) {
+                handleStop();
+            } else {
+                handleStart();
+            }
+        });
+
+        window.addEventListener('DOMContentLoaded', initCamera);
+        
+        window.addEventListener('beforeunload', () => {
+            if (stream) {
+                stream.getTracks().forEach(track => track.stop());
+            }
+            if (intervalId) {
+                clearInterval(intervalId);
+            }
+        });
+    </script>
+</body>
+</html>
