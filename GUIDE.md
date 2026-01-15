@@ -480,7 +480,7 @@ Contributions welcome! Here's how:
 
 **Submit PRs:**
 ```bash
-git clone https://github.com/yourusername/livevision.git
+git clone https://github.com/heyrtl/live-vision.git
 cd livevision
 # Make changes
 git commit -m "Description"
